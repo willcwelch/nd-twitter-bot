@@ -1,0 +1,9 @@
+{
+  "name": "nd-twitter-bot",
+  "version": "0.1.0",
+  "dependencies": {
+    "twit": "^1.1.20",
+    "geocoder": "^0.2.2",
+    "alchemyapi_node": "git://github.com/alchemyapi/alchemyapi_node#master"
+  }
+}
