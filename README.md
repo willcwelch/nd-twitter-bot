@@ -1,5 +1,5 @@
 # nd-twitter-bot
-A multi-functional Twitter bot. Install using `npm Install`.
+A multi-functional Twitter bot. Install using `npm install`.
 
 ## API Keys
 Both Twitter and AlchemyAPI require API keys. AlchemyAPI will automatically prompt you for a key. To add your Twitter credentials, create a file in the Twit module named `api_key.js` with the following format:
