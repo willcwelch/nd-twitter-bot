@@ -5,7 +5,7 @@
 
   var Twit = require('twit');
   var Geocoder = require('geocoder');
-  var AlchemyAPI = require('alchemyapi');
+  var AlchemyAPI = require('alchemyapi_node');
   var TwitKey = require('twit/api_key');
   
   // config vars
