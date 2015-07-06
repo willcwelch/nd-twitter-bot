@@ -14,7 +14,6 @@
   // setup
   var twitter = new Twit(TwitKey);
   var alchemyapi = new AlchemyAPI();
-  
   // Connect to Twitter and look for tweets inlcuding '@welch_test'
   var stream = twitter.stream('statuses/filter', {track: '@welch_test'});
   
@@ -29,9 +28,15 @@
         tweetData.constructor(tweet, function (err, response) {
 
           if (err) {
-            // Tweet back error.
+            console.log(err.message);
           } else {
-            response.printValues();
+            ForecastController.getZip(response, function (err, response) {
+              if (err) {
+                console.log(err);
+              } else {
+                console.log(response);
+              }
+            });
           }
 
         });
@@ -98,7 +103,7 @@
             cities = [];
           } else if (response.status === 'OK') {
             // Filter for the entities that are cities.
-            cities = response.entities.filter(function(value) {
+            cities = response.entities.filter(function (value) {
               return value.type === 'City';
             });
           }
@@ -135,6 +140,58 @@
 
     printValues: function() {
       console.log(this.city, this.date, this.text);
+    }
+  }
+
+  var ForecastController = {
+    getZip: function(data, callback) {
+      var zip, zips, latlon, name;
+
+      if (data.city.type === 'zip') {
+        callback(null, data.city.value);
+      } else if (data.city.type === 'latlon') {
+        latlon = data.city.value;
+        Geocoder.reverseGeocode(latlon[1], latlon[0], function (err, response) {
+          
+          if (err) {
+            callback(err);
+          } else {
+            zips = response.results[0].address_components.filter(function (value) {
+              return value.types[0] === 'postal_code';
+            });
+            callback(null, zips[0].long_name);
+          }
+
+        });
+      } else if (data.city.type === 'name') {
+        name = data.city.value;
+        Geocoder.geocode(name, function (err, response) {
+          
+          if (err) {
+            callback(err);
+          } else {
+            latlon = [];
+            latlon[0] = response.results[0].geometry.location.lat;
+            latlon[1] = response.results[0].geometry.location.lng;
+
+            Geocoder.reverseGeocode(latlon[0], latlon[1], function (err, response) {
+            
+              if (err) {
+                callback(err);
+              } else {
+                zips = response.results[0].address_components.filter(function (value) {
+                  return value.types[0] === 'postal_code';
+                });
+                callback(null, zips[0].long_name);
+              }
+
+            });
+          }
+
+        });
+      } else {
+        callback(new Error('Location type not recognized.'));
+      }
     }
   }
 
