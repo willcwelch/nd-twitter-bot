@@ -2,17 +2,20 @@
   
   // Import the necessary modules.
   require('./lib/sugar-dates');
-  var Twit = require('twit');
-  var Geocoder = require('geocoder');
-  var AlchemyAPI = require('alchemyapi_node');
-  var TwitKey = require('twit/api_key');
+  var Twit = require('twit'),
+      Geocoder = require('geocoder'),
+      AlchemyAPI = require('alchemyapi_node'),
+      MySQL = require('mysql'),
+      TwitKey = require('twit/api_key'),
+      config = require("./config.js").config;
   
   // Set the user ID for the account we're tweeting from.
   var userId = 3331300337;
 
-  // Instantiate Twit and AlchemyAPI.
-  var twitter = new Twit(TwitKey);
-  var alchemyapi = new AlchemyAPI();
+  // Instantiate Twit, AlchemyAPI and MySQL
+  var twitter = new Twit(TwitKey),
+      alchemyapi = new AlchemyAPI(),
+      connection = MySQL.createConnection(config.mysql);
 
   // Connect to Twitter and look for tweets inlcuding '@welch_test'.
   var stream = twitter.stream('statuses/filter', {track: '@welch_test'});
@@ -35,7 +38,7 @@
         } else {
 
           // Extract a zip code.
-          ForecastController.getZip(response, function (err, response) {
+          ForecastController.getZip(response.city, function (err, response) {
 
             // Handle any errors from exptracting the zip code.
             if (err) {
@@ -177,16 +180,74 @@
   // Object that takes tweet data and uses it to pull a forecast from memcached.
   var ForecastController = {
 
+    getForecast: function(location, callback) {
+      this.getLocationId(location, function (err, locationId) {
+        if (err) {
+          callback(err);
+        } else {
+          // search memcached
+        }
+      });
+    },
+
+    getLocationId: function(location, callback) {
+      this.getLocation(location, function (err, rows) {
+        if (err) {
+          callback(err);
+        } else if (rows.length > 0) {
+          callback(null, rows[0].location_id);
+        } else {
+          // add the new location id
+        }
+      });
+    },
+
+    getLocation: function(location, callback) {
+      if (location.type === 'zip') {
+        connection.query('SELECT * FROM twitterbot WHERE zip_code= ' + location.value, function (err, rows) {
+          if (err) {
+            callback(err);
+          } else {
+            callback (null, rows);
+          }
+        }
+      } else if (location.type === 'latlng') {
+        this.getZip(location, function (err, zip) {
+          if (err) {
+            callback(err);
+          } else {
+            connection.query('SELECT * FROM twitterbot WHERE zip_code= ' + zip, function (err, rows) {
+              if (err) {
+                callback(err);
+              } else {
+                callback(null, rows);
+              }
+            });
+          }
+        });
+      } else if (location.type === 'name') {
+        connection.query('SELECT * FROM twitterbot WHERE city= ' + location.value, function (err, rows) {
+          if (err) {
+            callback(err);
+          } else {
+            callback(null, rows);
+          }
+        });
+      } else {
+        callback(new Error('Location type not recognized.'));
+      }
+    },
+
     // Takes tweet data and sends back a postal code
-    getZip: function(data, callback) {
+    getZip: function(location, callback) {
       var zips, latlng, name;
 
       // If the data type is alread a zip code, send that.
-      if (data.city.type === 'zip') {
-        callback(null, data.city.value);
+      if (location.type === 'zip') {
+        callback(null, location.value);
       // If the data type is a latitude and longitude, let Geocoder parse it.
-      } else if (data.city.type === 'latlng') {
-        latlng = data.city.value;
+      } else if (location.type === 'latlng') {
+        latlng = location.value;
         // Send the latituted and longitude to Google through Geocoder.
         Geocoder.reverseGeocode(latlng[0], latlng[1], function (err, response) {
           
@@ -210,8 +271,8 @@
 
         });
       // If the data type is the name of a city, try very hard to turn it into a postal code.
-      } else if (data.city.type === 'name') {
-        name = data.city.value;
+      } else if (location.type === 'name') {
+        name = location.value;
         // Geocode the name to a latitude and longitude to make it easier to pull a specific postal code.
         Geocoder.geocode(name, function (err, response) {
           
