@@ -1,14 +1,28 @@
 # nd-twitter-bot
 A multi-functional Twitter bot. Install using `npm install`.
 
-## API Keys
-Both Twitter and AlchemyAPI require API keys. AlchemyAPI will automatically prompt you for a key. To add your Twitter credentials, create a file in the Twit module named `api_key.js` with the following format:
+## Credentials
+MySQL, WSI, Twitter and AlchemyAPI require credentials. AlchemyAPI will automatically prompt you for an API key the first time you run the package. To add your other credentials, create a file named `config.js` in the main directory with the following format:
 
 ```
-module.exports = {
-  consumer_key:     'YOUR_KEY_HERE',
-  consumer_secret:    'YOUR_KEY_HERE',
-  access_token:     'YOUR_KEY_HERE',
-  access_token_secret:  'YOUR_KEY_HERE'
-};
+exports.config = {
+  mysql: {
+    user: YOUR_USER_HERE,
+    password: YOUR_PASSWORD_HERE,
+    database: YOUR_DATABASE_HERE,
+    host: YOUR_HOST_HERE,
+    port: YOUR_PORT_HERE
+  },
+  wsi: {
+    address: YOUR_ADDRESS_HERE,
+    version: YOUR_VERSION_HERE,
+    serviceId: YOUR_SERVICE_ID_HERE
+  },
+  twitter: {
+    consumer_key: YOUR_KEY_HERE,
+    consumer_secret: YOUR_SECRET_HERE,
+    access_token: YOUR_TOKEN_HERE,
+    access_token_secret: YOUR_TOKEN_SECRET_HERE
+  }
+}
 ```

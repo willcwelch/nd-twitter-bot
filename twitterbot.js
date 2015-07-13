@@ -6,16 +6,19 @@
       Geocoder = require('geocoder'),
       AlchemyAPI = require('alchemyapi_node'),
       MySQL = require('mysql'),
-      TwitKey = require('twit/api_key'),
+      Memcached = require('memcached'),
+      request = require('request'),
       config = require("./config.js").config;
   
   // Set the user ID for the account we're tweeting from.
   var userId = 3331300337;
 
-  // Instantiate Twit, AlchemyAPI and MySQL
-  var twitter = new Twit(TwitKey),
+  // Instantiate Twit, AlchemyAPI, MySQL and Memcached
+  var twitter = new Twit(config.twitter),
       alchemyapi = new AlchemyAPI(),
-      connection = MySQL.createConnection(config.mysql);
+      connection = MySQL.createConnection(config.mysql),
+      memcached = new Memcached("localhost:11211", {}),
+      wsi = new WSI(config.wsi);
 
   // Connect to Twitter and look for tweets inlcuding '@welch_test'.
   var stream = twitter.stream('statuses/filter', {track: '@welch_test'});
@@ -185,7 +188,13 @@
         if (err) {
           callback(err);
         } else {
-          // search memcached
+          memcached.get("ForecastController:" + locationId, function (err, data) {
+            if (err) {
+               callback(err);
+            } else {
+              callback(null, data);
+            }
+          });
         }
       });
     },
@@ -210,7 +219,7 @@
           } else {
             callback (null, rows);
           }
-        }
+        });
       } else if (location.type === 'latlng') {
         this.getZip(location, function (err, zip) {
           if (err) {
@@ -316,6 +325,29 @@
         callback(new Error('Location type not recognized.'));
       }
     }
+  }
+
+  function WSI(config) {
+    this.LocationEndpoint = 'http://' + config.address + '/' + config.version + '/' + config.serviceId + '/Locations/Cities/';
+    this.WeatherEndpoint = 'http://' + config.address + '/' + config.version + '/' + config.serviceId + '/Weather/Report/';
+  }
+  WSI.prototype.getLocation = function (location, callback) {
+    request(this.LocationEndpoint + location, function (err, response, body) {
+      if (err) {
+        callback(err);
+      } else if (response.statusCode === 200) {
+        callback(null, body);
+      }
+    });
+  }
+  WSI.prototype.getWeather = function (locationId, callback) {
+      request(this.WeatherEndpoint + locationId, function (err, response, body) {
+      if (err) {
+        callback(err);
+      } else if (response.statusCode === 200) {
+        callback(null, body);
+      }
+    });
   }
 
 })();
