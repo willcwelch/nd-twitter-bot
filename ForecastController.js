@@ -19,6 +19,8 @@ ForecastController.prototype.getForecast = function(location, callback) {
       memcached.get("ForecastController:" + locationId, function (err, data) {
         if (err) {
           callback(err);
+        } else if (!data) {
+          addForecast(locationId, callback);
         } else {
           callback(null, data);
         }
@@ -111,6 +113,44 @@ ForecastController.prototype.addLocation = function(location, callback) {
           callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state});
         } else {
           callback(new Error('Location could not be inserted.'));
+        }
+      });
+    }
+  });
+}
+
+ForecastController.prototype.addForecast = function(locationId, callback) {
+  wsi.getForecast(locationId, function (err, data) {
+    if (err) {
+      callback(err);
+    } else {
+      var hourlyForecasts = [],
+          dailyForecasts = [];
+
+      var hourlyData = data.Cities.City.HourlyForecast.Hour,
+          dailyData = data.Cities.City.DailyForecast.Day;
+
+      for (var i = 0; i < hourlyData.length; i += 1) {
+        hourlyForecasts.push({
+          time: hourlyData[i].$.ValidDateLocal,
+          temperature: hourlyData[i].$.TempF,
+          sky: hourlyData[i].$.SkyLong
+        });
+      }
+      for (var i = 0; i < dailyData.length; i += 1) {
+        dailyForecasts.push({
+          time: dailyData[i].$.ValidDateLocal,
+          forecast: dailyData[i].$.PhraseDay
+        });
+      }
+
+      var forecast = {hourlyForecasts: hourlyForecasts, dailyForecasts: dailyForecasts};
+
+      memcached.add("ForecastController:" + locationId, forecast, 60 * 60 * 24, function (err) {
+        if (err) {
+          callback(err);
+        } else {
+          callback(null, forecast);
         }
       });
     }
