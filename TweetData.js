@@ -8,6 +8,7 @@ var TweetData = function(tweet, callback) {
   var that = this;
 
   this.text = tweet.text;
+  this.sender = tweet.user.screen_name;
   this.setDate(tweet);
   this.setCity(tweet, function (err, response) {
 
@@ -27,7 +28,7 @@ TweetData.prototype.setCity = function(tweet, callback) {
   var  cities, latlng = [], that = this;
 
   // Look for zip code in text with the format 00000-0000 or 00000.
-  cities = tweet.text.match(/^\d{5}(?:[-\s]\d{4})?/);
+  cities = tweet.text.match(/\d{5}(?:[-\s]\d{4})?/);
 
   // If a zip code is found, set it as the city.
   if (cities) {

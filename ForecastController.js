@@ -2,7 +2,7 @@ var mysql = require('mysql'),
     Memcached = require('memcached'),
     geocoder = require('geocoder'),
     WSI = require('./WSI.js').WSI;
-    config = require('./config.js').config,
+    config = require('./config.js').config;
 
 var connection = mysql.createConnection(config.mysql),
     memcached = new Memcached("localhost:11211", {}),
@@ -12,6 +12,8 @@ var ForecastController = function() {};
 
 // Takes TweetData location object and finds the appropriate forecast in memcached.
 ForecastController.prototype.getForecast = function(location, callback) {
+  var that = this;
+
   this.getLocationId(location, function (err, locationId) {
     if (err) {
       callback(err);
@@ -20,7 +22,7 @@ ForecastController.prototype.getForecast = function(location, callback) {
         if (err) {
           callback(err);
         } else if (!data) {
-          addForecast(locationId, callback);
+          that.addForecast(locationId, callback);
         } else {
           callback(null, data);
         }
@@ -32,13 +34,15 @@ ForecastController.prototype.getForecast = function(location, callback) {
 // Takes tweetData location object and checks if the locationId exists in in the database.
 // If the locationId isn't in the database, queries WSI, stores the location and returns the locationId.
 ForecastController.prototype.getLocationId = function(location, callback) {
+  var that = this;
+
   this.getLocation(location, function (err, rows) {
     if (err) {
       callback(err);
     } else if (rows.length > 0) {
       callback(null, rows[0].location_id);
     } else {
-      this.addLocation(location, function (err, data) {
+      that.addLocation(location, function (err, data) {
         if (err) {
           callback(err);
         } else {
@@ -51,35 +55,17 @@ ForecastController.prototype.getLocationId = function(location, callback) {
 
 ForecastController.prototype.getLocation = function(location, callback) {
   if (location.type === 'zip') {
-    connection.query('SELECT * FROM twitterbot WHERE zip_code= ' + location.value, function (err, rows) {
-      if (err) {
-        callback(err);
-      } else {
-        callback (null, rows);
-      }
-    });
+    connection.query("SELECT * FROM locations WHERE zip_code=" + location.value, callback);
   } else if (location.type === 'latlng') {
     this.getZip(location.value, function (err, zip) {
       if (err) {
         callback(err);
       } else {
-        connection.query('SELECT * FROM twitterbot WHERE zip_code= ' + zip, function (err, rows) {
-          if (err) {
-            callback(err);
-          } else {
-            callback(null, rows);
-          }
-        });
+        connection.query("SELECT * FROM locations WHERE zip_code=" + zip, callback);
       }
     });
   } else if (location.type === 'name') {
-    connection.query('SELECT * FROM twitterbot WHERE city= ' + location.value, function (err, rows) {
-      if (err) {
-        callback(err);
-      } else {
-        callback(null, rows);
-      }
-    });
+    connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", callback);
   } else {
     callback(new Error('Location type not recognized.'));
   }
@@ -105,14 +91,12 @@ ForecastController.prototype.addLocation = function(location, callback) {
           zipCode = data.Cities.City[0].$.PreferredZipCode,
           city = data.Cities.City[0].$.Name,
           state = data.Cities.City[0].$.StateAbbr;
-          
-      connection.query('INSERT INTO locations (location_id, zip_code, city, state) VALUES (' + locationId + ',' + zipCode + ',' + city + ',' + state + ');', function (err, result) {
+
+      connection.query("INSERT INTO locations (location_id, zip_code, city, state) VALUES ('" + locationId + "','" + zipCode + "','" + city + "','" + state + "');", function (err, result) {
         if (err) {
           callback(err);
-        } else if (result === true) {
-          callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state});
         } else {
-          callback(new Error('Location could not be inserted.'));
+          callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state});
         }
       });
     }
@@ -120,18 +104,20 @@ ForecastController.prototype.addLocation = function(location, callback) {
 }
 
 ForecastController.prototype.addForecast = function(locationId, callback) {
-  wsi.getForecast(locationId, function (err, data) {
+  wsi.getWeather(locationId, function (err, data) {
     if (err) {
       callback(err);
     } else {
       var hourlyForecasts = [],
           dailyForecasts = [];
 
-      var hourlyData = data.Cities.City.HourlyForecast.Hour,
-          dailyData = data.Cities.City.DailyForecast.Day;
+      var hourlyData = data.Cities.City[0].HourlyForecast[0].Hour,
+          dailyData = data.Cities.City[0].DailyForecast[0].Day,
+          city = data.Cities.City[0].$.Name + ', ' + data.Cities.City[0].$.StateAbbr;
 
       for (var i = 0; i < hourlyData.length; i += 1) {
         hourlyForecasts.push({
+          city: city,
           time: hourlyData[i].$.ValidDateLocal,
           temperature: hourlyData[i].$.TempF,
           sky: hourlyData[i].$.SkyLong
@@ -139,6 +125,7 @@ ForecastController.prototype.addForecast = function(locationId, callback) {
       }
       for (var i = 0; i < dailyData.length; i += 1) {
         dailyForecasts.push({
+          city: city,
           time: dailyData[i].$.ValidDateLocal,
           forecast: dailyData[i].$.PhraseDay
         });
@@ -146,7 +133,7 @@ ForecastController.prototype.addForecast = function(locationId, callback) {
 
       var forecast = {hourlyForecasts: hourlyForecasts, dailyForecasts: dailyForecasts};
 
-      memcached.add("ForecastController:" + locationId, forecast, 60 * 60 * 24, function (err) {
+      memcached.add("ForecastController:" + locationId, forecast, 60 * 60, function (err) {
         if (err) {
           callback(err);
         } else {

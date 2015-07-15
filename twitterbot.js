@@ -1,8 +1,10 @@
 (function() {
+
+  require('./lib/sugar-dates');
   
   var Twit = require('twit'),
       TweetData = require('./TweetData.js').TweetData,
-      forecastController = require('./ForecastController.js').ForecastController,
+      weatherBot = require('./WeatherBot.js').WeatherBot,
       config = require('./config.js').config;
   
   // Set the user ID for the account we're tweeting from.
@@ -10,8 +12,23 @@
 
   var twitter = new Twit(config.twitter);
 
+  /* TEST CODE 
+  var tweetData = {
+    test: 'weather in 03458 tomorrow',
+    sender: 'welch_test',
+    date: {value: Date.create('tomorrow 12pm'), parsed: true},
+    city: {value: '03449', type: 'zip', parsed: true}
+  }
 
-  /*
+  weatherBot.getTweet(tweetData, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(response);
+    }
+  });
+  */
+
   // Connect to Twitter and look for tweets inlcuding '@welch_test'.
   var stream = twitter.stream('statuses/filter', {track: '@welch_test'});
   
@@ -22,10 +39,43 @@
       console.log('Mentioned or my own tweet: ', tweet.text);
     // Check if the tweet is about weather.
     } else if (/weather/i.test(tweet.text) || /forecast/i.test(tweet.text)) {
-      console.log('Tweet about weather.');
+      
+      var tweetData = new TweetData(tweet, function (err, result) {
+        if (err) {
+          console.log(err);
+          twitter.post('statuses/update', {status: '@' + tweetData.sender + ' Sorry, I could not get a location. Try using a ZIP code.'}, function (err, data) {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log('Tweet sent.');
+            }
+          });
+        } else {
+          weatherBot.getTweet(tweetData, function (err, response) {
+            if (err) {
+              console.log(err);
+            } else {
+              twitter.post('statuses/update', {status: response}, function (err, data) {
+                if (err) {
+                  console.log(err);
+                } else {
+                  console.log('Tweet sent.');
+                }
+              });
+            }
+          });
+        }
+      });
+
     // If the tweet was a reply but we don't know what it's about, ignore it.
     } else {
-      console.log('Not sure what this is about.');
+      twitter.post('statuses/update', {status: '@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.'}, function (err, data) {
+        if (err) {
+          console.log(err);
+        } else {
+          console.log('Tweet sent.');
+        }
+      });
     }
   });
 
@@ -50,7 +100,5 @@
     console.log('Request: ', request);
     console.log('Response: ', response);
   });
-
-  */
 
 })();
