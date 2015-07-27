@@ -7,8 +7,6 @@ var alchemyapi = new AlchemyAPI();
 var TweetData = function(tweet, callback) {
   var that = this;
 
-  console.log(tweet);
-
   this.text = tweet.text;
   this.sender = tweet.user.screen_name;
   this.setDate(tweet);
@@ -27,7 +25,7 @@ var TweetData = function(tweet, callback) {
 
 // Sets 'city' to {[value], [type], [parsed]}.
 TweetData.prototype.setCity = function(tweet, callback) {
-  var  cities, latlng = [], that = this;
+  var  cities, states, latlng = [], that = this;
 
   // Look for zip code in text with the format 00000-0000 or 00000.
   cities = tweet.text.match(/\d{5}(?:[-\s]\d{4})?/);
@@ -39,21 +37,26 @@ TweetData.prototype.setCity = function(tweet, callback) {
   // If a zip code isn't found, try to find a city in the text using AlchemyAPI.
   } else {
     alchemyapi.entities('text', tweet.text, {}, function (response) {
-      
-      // If AlchemyAPI sends an error, make the cities array empty.
-      if (response.status === 'ERROR') {
-        cities = [];
       // If AlchemyAPI sends a response, filter it for entities that are cities and add them to the cities array.
-      // TODO: add State abbreviation if it exists. Try NY if it doesn't exist.
-      } else if (response.status === 'OK') {
+      if (response.status === 'OK') {
         cities = response.entities.filter(function (value) {
           return value.type === 'City';
         });
+        states = response.entities.filter(function (value) {
+          return value.type === 'StateOrCounty';
+        });
+      } else {
+        // If AlchemyAPI sends an error, make the cities array empty.
+        cities = [];
       }
 
       // If there are cities from Alchemy API, send the first result.
       if (cities.length > 0) {
         that.city = {value: cities[0].text, type: 'name', parsed: true};
+        if (states.length > 0) {
+          console.log(states);
+          that.city.state = states[0].text;
+        }
         callback(null, that.city);
       // If there are no cities from AlchemyAPI but the tweet has an exact location, send that as the city.
       } else if (tweet.coordinates) {
@@ -76,8 +79,7 @@ TweetData.prototype.setCity = function(tweet, callback) {
       
     });
   }
-
-},
+}
 
 // Sets 'date' to {[value], [parsed]}
 TweetData.prototype.setDate = function(tweet) {

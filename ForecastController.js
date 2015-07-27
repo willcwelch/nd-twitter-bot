@@ -64,8 +64,28 @@ ForecastController.prototype.getLocation = function(location, callback) {
         connection.query("SELECT * FROM locations WHERE zip_code=" + zip, callback);
       }
     });
+  } else if (location.state) {
+    connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND (state='" + location.state + "' OR state_full='" + location.state + "')", callback);
   } else if (location.type === 'name') {
-    connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", callback);
+    connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND state='NY'", function (err, rows) {
+      if (err) {
+        callback(err);
+      } else if (rows.length > 0) {
+        callback (null, rows);
+      } else {
+        connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", function (err, rows) {
+          if (err) {
+            callback(err);
+          } else if (rows.length === 1) {
+            callback (null, rows);
+          } else if (rows.length > 1) {
+            callback (new Error('Location not specific enough'));
+          } else {
+            callback(err, rows);
+          }
+        });
+      }
+    });
   } else {
     callback(new Error('Location type not recognized.'));
   }
@@ -73,7 +93,7 @@ ForecastController.prototype.getLocation = function(location, callback) {
 
 // Takes tweetData location object and queries WSI, adding the result to database
 ForecastController.prototype.addLocation = function(location, callback) {
-  var locationValue;
+  var locationValue, selectedCity, that = this;
 
   if (location.type === 'zip' || location.type === 'name') {
     locationValue = location.value;
@@ -87,23 +107,64 @@ ForecastController.prototype.addLocation = function(location, callback) {
     if (err) {
       callback(err);
     } else {
-      var locationId = data.Cities.City[0].$.Id,
-          zipCode = data.Cities.City[0].$.PreferredZipCode,
-          city = data.Cities.City[0].$.Name,
-          state = data.Cities.City[0].$.StateAbbr;
 
-      connection.query("INSERT INTO locations (location_id, zip_code, city, state) VALUES ('" + locationId + "','" + zipCode + "','" + city + "','" + state + "');", function (err, result) {
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state});
-        }
-      });
+      selectedCity = that.findLocation(data.Cities.City, location);
+
+      if (selectedCity) {
+        var locationId = selectedCity.$.Id,
+            zipCode = selectedCity.$.PreferredZipCode,
+            city = selectedCity.$.Name,
+            state = selectedCity.$.StateAbbr;
+            state_full = selectedCity.$.StateName;
+
+        connection.query("INSERT INTO locations (location_id, zip_code, city, state, state_full) VALUES ('" + locationId + "','" + zipCode + "','" + city + "','" + state + "','" + state_full + "');", function (err, result) {
+          if (err) {
+            callback(err);
+          } else {
+            callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state, state_full: state_full});
+          }
+        });
+      } else {
+        callback(new Error('Location not specific enough'));
+      }
     }
   });
 }
 
-ForecastController.prototype.addForecast = function(locationId, callback) {
+// Takes an array of WSI cities and a TweetData location object and returns the WPI City for the location.
+// Only returns a city for the "name" type if there is also a state, the name exists in NY, or there is only one in the United States.
+// Only returns a city for the "latlon" and "zip" types if is only one result and it is in the United States.
+ForecastController.prototype.findLocation = function (cities, location) {
+  var possibleCities = [];
+
+  if (location.state) {
+    for (var i = 0; i < cities.length; i += 1) {
+      if (cities[i].$.StateAbbr === location.state || cities[i].$.StateName === location.state) {
+        return cities[i];
+      }
+    }
+  } else if (location.type === 'name') {
+    for (var i = 0; i < cities.length; i += 1) {
+      if (cities[i].$.StateAbbr === 'NY') {
+        return cities[i];
+      }
+    }
+  } else {
+    for (var i = 0; i < cities.length; i += 1) {
+      if (cities[i].$.CountryFips === 'US') {
+        possibleCities.push(cities[i]);
+      }
+    }
+
+    if (possibleCities.length === 1) {
+      return possibleCities[0];
+    } else {
+      return null;
+    }
+  }
+}
+
+ForecastController.prototype.addForecast = function (locationId, callback) {
   wsi.getWeather(locationId, function (err, data) {
     if (err) {
       callback(err);
