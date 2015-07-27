@@ -4,6 +4,7 @@ var forecastController = require('./ForecastController.js').ForecastController;
 
 var WeatherBot = function() {};
 
+// Sends back a message for twitterbot to tweet
 WeatherBot.prototype.getTweet = function(tweetData, callback) {
   var that = this;
 
@@ -27,6 +28,7 @@ WeatherBot.prototype.getTweet = function(tweetData, callback) {
   });
 }
 
+// Takes a forecasts object and finds a forecast that matches the time.
 WeatherBot.prototype.selectForecast = function(time, forecasts) {
   if (time > (1).hoursBefore('now') && time < (48).hoursAfter('now')) {
     forecasts = forecasts.hourlyForecasts;

@@ -43,25 +43,14 @@
       var tweetData = new TweetData(tweet, function (err, result) {
         if (err) {
           console.log(err);
-          twitter.post('statuses/update', {status: '@' + tweetData.sender + ' Sorry, I could not get a location. Try using a ZIP code.'}, function (err, data) {
-            if (err) {
-              console.log(err);
-            } else {
-              console.log('Tweet sent.');
-            }
-          });
+          console.log('@' + tweet.user.screen_name + ' Sorry, I could not get a location. Try using a ZIP code.');
         } else {
-          weatherBot.getTweet(tweetData, function (err, response) {
+          console.log(result);
+          weatherBot.getTweet(result, function (err, response) {
             if (err) {
               console.log(err);
             } else {
-              twitter.post('statuses/update', {status: response}, function (err, data) {
-                if (err) {
-                  console.log(err);
-                } else {
-                  console.log('Tweet sent.');
-                }
-              });
+              console.log(response);
             }
           });
         }
@@ -69,13 +58,7 @@
 
     // If the tweet was a reply but we don't know what it's about, ignore it.
     } else {
-      twitter.post('statuses/update', {status: '@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.'}, function (err, data) {
-        if (err) {
-          console.log(err);
-        } else {
-          console.log('Tweet sent.');
-        }
-      });
+      console.log('@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.');
     }
   });
 
@@ -100,5 +83,15 @@
     console.log('Request: ', request);
     console.log('Response: ', response);
   });
+
+  var sendTweet = function(message) {
+    twitter.post('statuses/update', {status: message}, function (err, data) {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log('Tweet sent.');
+      }
+    });
+  }
 
 })();

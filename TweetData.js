@@ -7,6 +7,8 @@ var alchemyapi = new AlchemyAPI();
 var TweetData = function(tweet, callback) {
   var that = this;
 
+  console.log(tweet);
+
   this.text = tweet.text;
   this.sender = tweet.user.screen_name;
   this.setDate(tweet);
@@ -53,11 +55,17 @@ TweetData.prototype.setCity = function(tweet, callback) {
       if (cities.length > 0) {
         that.city = {value: cities[0].text, type: 'name', parsed: true};
         callback(null, that.city);
-      // If there are no cities from AlchemyAPI but the tweet has a location, send that as the city.
-      } else if (tweet.coordinates !== null) {
+      // If there are no cities from AlchemyAPI but the tweet has an exact location, send that as the city.
+      } else if (tweet.coordinates) {
         // Since Twitter returns coordinates as an array in the format [lng,lat], reorder it to [lat,lng].
         latlng[0] = tweet.coordinates.coordinates[1];
         latlng[1] = tweet.coordinates.coordinates[0];
+        that.city = {value: latlng, type: 'latlng', parsed: false};
+        callback(null, that.city);
+      // If there is no exact location from Twitter but there is a place, send the fist coordinate of the boundry as the city.
+      } else if (tweet.place) {
+        latlng[0] = tweet.place.bounding_box.coordinates[0][0][1];
+        latlng[1] = tweet.place.bounding_box.coordinates[0][0][0];
         that.city = {value: latlng, type: 'latlng', parsed: false};
         callback(null, that.city);
       // If there is no location information, send an error.
@@ -73,11 +81,14 @@ TweetData.prototype.setCity = function(tweet, callback) {
 
 // Sets 'date' to {[value], [parsed]}
 TweetData.prototype.setDate = function(tweet) {
-  var date;
+  var date, cleanedString;
+
+  // Clean zip codes for date parsing.
+  cleanedString = tweet.text.replace(/\d{5}(?:[-\s]\d{4})?/, '');
 
   // Try to create a date from the tweet text using Sugar's loose date parsing.
   // TODO: add functionality for recognizing morning, afternoon, night, evening, etc for times.
-  date = Date.create(tweet.text, true);
+  date = Date.create(cleanedString, true);
 
   // If Sugar couldn't create a date, set the date to the time the tweet was sent.
   if (isNaN(date.valueOf())) {
