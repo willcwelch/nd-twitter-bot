@@ -4,23 +4,28 @@ var forecastController = require('./ForecastController.js').ForecastController;
 
 var WeatherBot = function() {};
 
-// Sends back a message for twitterbot to tweet
+// Takes a TweetData object and returns a weather tweet based on the data.
 WeatherBot.prototype.getTweet = function(tweetData, callback) {
-  var that = this;
+  var that = this, forecast;
 
   forecastController.getForecast(tweetData.city, function (err, forecasts) {
     if (err) {
       callback(err);
     } else {
-      var forecast = that.selectForecast(tweetData.date.value, forecasts);
+      forecast = that.selectForecast(tweetData.date.value, forecasts);
 
+      // TODO: Add message for unspecific locations.
       if (forecast === null) {
+        // If the value of forecast wasn't set, there wasn't a forecast in the time range.
         callback(null, '@' + tweetData.sender + ' Sorry, I can only tell you about the next 10 days.');
       } else if (forecast.forecast) {
+        // If forecast has the forecast property, it's more than 48 hours from now.
         callback(null, '@' + tweetData.sender + ' Forecast for ' + forecast.city + ' on ' + Date.create(forecast.time).format('{Weekday}') + ': ' + forecast.forecast);
       } else if (tweetData.date.parsed) {
+        // If the user provided a date and the previous condition wasn't triggered, this is a forecast in the next 48 hours.
         callback(null, '@' + tweetData.sender + ' Forecast for ' + forecast.city + ' ' + Date.create(forecast.time).relative() + ': ' + forecast.sky + ' and ' + forecast.temperature + '°F.');
       } else {
+        // If the user didn't provide a date, this is a forecast for now.
         callback(null, '@' + tweetData.sender + ' I could not find a time. Current weather for ' + forecast.city + ': ' + forecast.sky + ' and ' + forecast.temperature + '°F.');
       }
     }
@@ -30,6 +35,8 @@ WeatherBot.prototype.getTweet = function(tweetData, callback) {
 
 // Takes a forecasts object and finds a forecast that matches the time.
 WeatherBot.prototype.selectForecast = function(time, forecasts) {
+  var forecasts;
+
   if (time > (1).hoursBefore('now') && time < (48).hoursAfter('now')) {
     forecasts = forecasts.hourlyForecasts;
   } else if (time > (48).hoursAfter('now') && time < (10).daysAfter('now')) {
@@ -38,6 +45,7 @@ WeatherBot.prototype.selectForecast = function(time, forecasts) {
     return null;
   }
 
+  // Selects the first forecast with a time greater than the time requested.
   for (var i = 0; i < forecasts.length; i += 1) {
     if (Date.create(forecasts[i].time) > time) {
       return forecasts[i];

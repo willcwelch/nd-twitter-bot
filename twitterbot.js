@@ -7,39 +7,21 @@
       weatherBot = require('./WeatherBot.js').WeatherBot,
       config = require('./config.js').config;
   
-  // Set the user ID for the account we're tweeting from.
-  var userId = 3331300337;
-
+  var userId = 3331300337; // The user ID for the account we're tweeting from.
   var twitter = new Twit(config.twitter);
-
-  /* TEST CODE 
-  var tweetData = {
-    test: 'weather in 03458 tomorrow',
-    sender: 'welch_test',
-    date: {value: Date.create('tomorrow 12pm'), parsed: true},
-    city: {value: '03449', type: 'zip', parsed: true}
-  }
-
-  weatherBot.getTweet(tweetData, function (err, response) {
-    if (err) {
-      console.log(err);
-    } else {
-      console.log(response);
-    }
-  });
-  */
-
-  // Connect to Twitter and look for tweets inlcuding '@welch_test'.
   var stream = twitter.stream('statuses/filter', {track: '@welch_test'});
   
   // Handle the tweet if one comes through on the stream.
   stream.on('tweet', function (tweet) {
+
   	// Check if the tweet was sent from the current acount, or if the account was only mentioned.
     if (tweet.in_reply_to_user_id !== userId && tweet.user.id !== userId) {
       console.log('Mentioned or my own tweet: ', tweet.text);
+
     // Check if the tweet is about weather.
     } else if (/weather/i.test(tweet.text) || /forecast/i.test(tweet.text)) {
       
+      // TODO: Async waterfall
       var tweetData = new TweetData(tweet, function (err, result) {
         if (err) {
           console.log(err);
@@ -84,6 +66,7 @@
     console.log('Response: ', response);
   });
 
+  // Takes a string and tweets it.
   var sendTweet = function(message) {
     twitter.post('statuses/update', {status: message}, function (err, data) {
       if (err) {

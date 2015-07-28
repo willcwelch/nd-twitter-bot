@@ -14,6 +14,7 @@ var ForecastController = function() {};
 ForecastController.prototype.getForecast = function(location, callback) {
   var that = this;
 
+  // TODO: Async waterfall.
   this.getLocationId(location, function (err, locationId) {
     if (err) {
       callback(err);
@@ -31,11 +32,12 @@ ForecastController.prototype.getForecast = function(location, callback) {
   });
 }
 
-// Takes tweetData location object and checks if the locationId exists in in the database.
+// Takes TweetData location object and checks if the locationId exists in in the database.
 // If the locationId isn't in the database, queries WSI, stores the location and returns the locationId.
 ForecastController.prototype.getLocationId = function(location, callback) {
   var that = this;
 
+  // TODO: Async waterfall.
   this.getLocation(location, function (err, rows) {
     if (err) {
       callback(err);
@@ -53,10 +55,13 @@ ForecastController.prototype.getLocationId = function(location, callback) {
   });
 }
 
+// Takes TweetData location object and returns the location if it exists in the database.
 ForecastController.prototype.getLocation = function(location, callback) {
   if (location.type === 'zip') {
+    // If the value is a zip code, just pull the first result because it's a unique value.
     connection.query("SELECT * FROM locations WHERE zip_code=" + location.value, callback);
   } else if (location.type === 'latlng') {
+    // If the value is coordinates, convert it to a zip code so it can be searched in the database.
     this.getZip(location.value, function (err, zip) {
       if (err) {
         callback(err);
@@ -65,14 +70,20 @@ ForecastController.prototype.getLocation = function(location, callback) {
       }
     });
   } else if (location.state) {
-    connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND (state='" + location.state + "' OR state_full='" + location.state + "')", callback);
+    // If a state is specified, just pull the first result.
+    connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND (state='" + 
+      location.state + "' OR state_full='" + location.state + "')", callback);
   } else if (location.type === 'name') {
+    // TODO: Async waterfall
+    // If a state wasn't specified, try using NY. 
     connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND state='NY'", function (err, rows) {
       if (err) {
         callback(err);
       } else if (rows.length > 0) {
         callback (null, rows);
       } else {
+        // If NY didn't return a result, send back any instance of the city, as long as there isn't more than one.
+        // If there is no unique value, return an error.
         connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", function (err, rows) {
           if (err) {
             callback(err);
@@ -81,20 +92,22 @@ ForecastController.prototype.getLocation = function(location, callback) {
           } else if (rows.length > 1) {
             callback (new Error('Location not specific enough'));
           } else {
-            callback(err, rows);
+            callback(null, rows);
           }
         });
       }
     });
   } else {
+    // If none of the above worked, it's an unrecognized type.
     callback(new Error('Location type not recognized.'));
   }
 }
 
-// Takes tweetData location object and queries WSI, adding the result to database
+// Takes TweetData location object and queries WSI, adding the result to database.
 ForecastController.prototype.addLocation = function(location, callback) {
   var locationValue, selectedCity, that = this;
 
+  // Set locationValue to a string that WSI can interpret.
   if (location.type === 'zip' || location.type === 'name') {
     locationValue = location.value;
   } else if (location.type === 'latlng') {
@@ -103,11 +116,11 @@ ForecastController.prototype.addLocation = function(location, callback) {
     callback(new Error('Location type not recognized.'));
   }
 
+  // TODO: Async waterfall.
   wsi.getLocation(locationValue, function (err, data) {
     if (err) {
       callback(err);
     } else {
-
       selectedCity = that.findLocation(data.Cities.City, location);
 
       if (selectedCity) {
@@ -117,13 +130,15 @@ ForecastController.prototype.addLocation = function(location, callback) {
             state = selectedCity.$.StateAbbr;
             state_full = selectedCity.$.StateName;
 
-        connection.query("INSERT INTO locations (location_id, zip_code, city, state, state_full) VALUES ('" + locationId + "','" + zipCode + "','" + city + "','" + state + "','" + state_full + "');", function (err, result) {
+        connection.query("INSERT INTO locations (location_id, zip_code, city, state, state_full) VALUES ('" + 
+          locationId + "','" + zipCode + "','" + city + "','" + state + "','" + state_full + "');", function (err, result) {
           if (err) {
             callback(err);
           } else {
             callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state, state_full: state_full});
           }
         });
+
       } else {
         callback(new Error('Location not specific enough'));
       }
@@ -131,31 +146,31 @@ ForecastController.prototype.addLocation = function(location, callback) {
   });
 }
 
-// Takes an array of WSI cities and a TweetData location object and returns the WPI City for the location.
-// Only returns a city for the "name" type if there is also a state, the name exists in NY, or there is only one in the United States.
-// Only returns a city for the "latlon" and "zip" types if is only one result and it is in the United States.
+// Takes an array of WSI cities and a TweetData location object and returns the WSI city for the location.
 ForecastController.prototype.findLocation = function (cities, location) {
   var possibleCities = [];
 
   if (location.state) {
+    // If a state is specified, return the first result in that state.
     for (var i = 0; i < cities.length; i += 1) {
       if (cities[i].$.StateAbbr === location.state || cities[i].$.StateName === location.state) {
         return cities[i];
       }
     }
   } else if (location.type === 'name') {
+    // If it's a city name but no state is specified, try returning the first result from NY.
     for (var i = 0; i < cities.length; i += 1) {
       if (cities[i].$.StateAbbr === 'NY') {
         return cities[i];
       }
     }
   } else {
+    // If the above didn't work, return a result if it is the only one in the US. 
     for (var i = 0; i < cities.length; i += 1) {
       if (cities[i].$.CountryFips === 'US') {
         possibleCities.push(cities[i]);
       }
     }
-
     if (possibleCities.length === 1) {
       return possibleCities[0];
     } else {
@@ -164,6 +179,7 @@ ForecastController.prototype.findLocation = function (cities, location) {
   }
 }
 
+// Takes a locationId and queries WSI for the forecasts, adding them to memcached.
 ForecastController.prototype.addForecast = function (locationId, callback) {
   wsi.getWeather(locationId, function (err, data) {
     if (err) {
@@ -205,27 +221,22 @@ ForecastController.prototype.addForecast = function (locationId, callback) {
   });
 }
 
-// Takes latlng array and sends back a postal code
+// Takes coordinates and sends back a postal code.
 ForecastController.prototype.getZip = function(latlng, callback) {
   var zips;
 
-  // Send the latituted and longitude to Google through geocoder.
   geocoder.reverseGeocode(latlng[0], latlng[1], function (err, response) {
-    // If Google sends an error, return the error.
     if (err) {
       callback(err);
-    // If Google sends a response, filter it for a postal code.
     } else {
       zips = response.results[0].address_components.filter(function (value) {
         return value.types[0] === 'postal_code';
       });
 
-      // If there are postal codes, send the first one.
       if (zips) {
         callback(null, zips[0].long_name);
-      // If there are no postal codes, send an error.
       } else {
-        callback(new Error('Could not find a zip code.'))
+        callback(new Error('Could not find a zip code for the given coordinates.'))
       }
     }
   });
