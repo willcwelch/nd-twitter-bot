@@ -27,7 +27,6 @@
           console.log(err);
           console.log('@' + tweet.user.screen_name + ' Sorry, I could not get a location. Try using a ZIP code.');
         } else {
-          console.log(result);
           weatherBot.getTweet(result, function (err, response) {
             if (err) {
               console.log(err);
