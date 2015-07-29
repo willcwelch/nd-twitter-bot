@@ -3,9 +3,9 @@
   require('./lib/sugar-dates');
   
   var Twit = require('twit'),
-      TweetData = require('./TweetData.js').TweetData,
-      weatherBot = require('./WeatherBot.js').WeatherBot,
       async = require('async'),
+      TweetData = require('./lib/TweetData.js').TweetData,
+      weatherBot = require('./lib/weatherbot/WeatherBot.js').WeatherBot,
       config = require('./config.js').config;
   
   var userId = 3331300337; // The user ID for the account we're tweeting from.

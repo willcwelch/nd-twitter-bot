@@ -1,8 +1,22 @@
 # nd-twitter-bot
 A multi-functional Twitter bot. Install using `npm install`.
 
-## Credentials
-MySQL, WSI, Twitter and AlchemyAPI require credentials. AlchemyAPI will automatically prompt you for an API key the first time you run the package. To add your other credentials, create a file named `config.js` in the main directory with the following format:
+## TwitterBot Credentials
+Twitter and AlchemyAPI require credentials. AlchemyAPI will automatically prompt you for an API key the first time you run the package. To add your Twitter credentials, create a file named `config.js` in the main directory with the following format:
+
+```
+exports.config = {
+  twitter: {
+    consumer_key: YOUR_KEY_HERE,
+    consumer_secret: YOUR_SECRET_HERE,
+    access_token: YOUR_TOKEN_HERE,
+    access_token_secret: YOUR_TOKEN_SECRET_HERE
+  }
+}
+```
+
+## WeatherBot Credentials
+MySQL and WSI require credentials. To add them, create a file named `config.js` in the weatherbot directory with the following format:
 
 ```
 exports.config = {
@@ -18,11 +32,5 @@ exports.config = {
     version: YOUR_VERSION_HERE,
     serviceId: YOUR_SERVICE_ID_HERE
   },
-  twitter: {
-    consumer_key: YOUR_KEY_HERE,
-    consumer_secret: YOUR_SECRET_HERE,
-    access_token: YOUR_TOKEN_HERE,
-    access_token_secret: YOUR_TOKEN_SECRET_HERE
-  }
 }
 ```
