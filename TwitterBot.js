@@ -5,6 +5,7 @@
   var Twit = require('twit'),
       TweetData = require('./TweetData.js').TweetData,
       weatherBot = require('./WeatherBot.js').WeatherBot,
+      async = require('async'),
       config = require('./config.js').config;
   
   var userId = 3331300337; // The user ID for the account we're tweeting from.
@@ -14,31 +15,31 @@
   // Handle the tweet if one comes through on the stream.
   stream.on('tweet', function (tweet) {
 
-  	// Check if the tweet was sent from the current acount, or if the account was only mentioned.
     if (tweet.in_reply_to_user_id !== userId && tweet.user.id !== userId) {
+      // Log if the tweet was sent from the current acount, or if the account was only mentioned.
       console.log('Mentioned or my own tweet: ', tweet.text);
 
-    // Check if the tweet is about weather.
     } else if (/weather/i.test(tweet.text) || /forecast/i.test(tweet.text)) {
-      
-      // TODO: Async waterfall
-      var tweetData = new TweetData(tweet, function (err, result) {
-        if (err) {
-          console.log(err);
+      // Handle the tweet if it is about weather.
+      async.waterfall([
+        function (cb) {
+          new TweetData(tweet, cb);
+        },
+        function (result, cb) {
+          weatherBot.getTweet(result, cb);
+        }
+      ], function (err, response) {
+        if (err && err.name === 'LocationError') {
           console.log('@' + tweet.user.screen_name + ' Sorry, I could not get a location. Try using a ZIP code.');
+        } else if (err) {
+          console.log(err);
         } else {
-          weatherBot.getTweet(result, function (err, response) {
-            if (err) {
-              console.log(err);
-            } else {
-              console.log(response);
-            }
-          });
+          console.log(response);
         }
       });
 
-    // If the tweet was a reply but we don't know what it's about, ignore it.
     } else {
+      // If the tweet was a reply but we don't know what it's about, ignore it.
       console.log('@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.');
     }
   });

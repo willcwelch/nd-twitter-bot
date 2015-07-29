@@ -1,7 +1,8 @@
 var mysql = require('mysql'),
     Memcached = require('memcached'),
     geocoder = require('geocoder'),
-    WSI = require('./WSI.js').WSI;
+    WSI = require('./WSI.js').WSI,
+    async = require('async'),
     config = require('./config.js').config;
 
 var connection = mysql.createConnection(config.mysql),
@@ -12,22 +13,23 @@ var ForecastController = function() {};
 
 // Takes TweetData location object and finds the appropriate forecast in memcached.
 ForecastController.prototype.getForecast = function(location, callback) {
-  var that = this;
+  var id, that = this;
 
-  // TODO: Async waterfall.
-  this.getLocationId(location, function (err, locationId) {
+  async.waterfall([
+    function (cb) {
+      that.getLocationId(location, cb);
+    },
+    function (locationId, cb) {
+      id = locationId;
+      memcached.get("ForecastController:" + id, cb);
+    }
+  ], function (err, data) {
     if (err) {
       callback(err);
+    } else if (!data) {
+      that.addForecast(id, callback);
     } else {
-      memcached.get("ForecastController:" + locationId, function (err, data) {
-        if (err) {
-          callback(err);
-        } else if (!data) {
-          that.addForecast(locationId, callback);
-        } else {
-          callback(null, data);
-        }
-      });
+      callback(null, data);
     }
   });
 }
@@ -37,20 +39,22 @@ ForecastController.prototype.getForecast = function(location, callback) {
 ForecastController.prototype.getLocationId = function(location, callback) {
   var that = this;
 
-  // TODO: Async waterfall.
-  this.getLocation(location, function (err, rows) {
+  async.waterfall([
+    function (cb) {
+      that.getLocation(location, cb);
+    },
+    function (rows, fields, cb) {
+      if (rows.length > 0) {
+        callback(null, rows[0].location_id);
+      } else {
+        that.addLocation(location, cb);
+      }
+    }
+  ], function (err, data) {
     if (err) {
       callback(err);
-    } else if (rows.length > 0) {
-      callback(null, rows[0].location_id);
     } else {
-      that.addLocation(location, function (err, data) {
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, data.locationId);
-        }
-      });
+      callback(null, data.locationId);
     }
   });
 }
@@ -58,7 +62,7 @@ ForecastController.prototype.getLocationId = function(location, callback) {
 // Takes TweetData location object and returns the location if it exists in the database.
 ForecastController.prototype.getLocation = function(location, callback) {
   if (location.type === 'zip') {
-    // If the value is a zip code, just pull the first result because it's a unique value.
+    // If the value is a zip code, pull the first result because it's a unique value.
     connection.query("SELECT * FROM locations WHERE zip_code=" + location.value, callback);
   } else if (location.type === 'latlng') {
     // If the value is coordinates, convert it to a zip code so it can be searched in the database.
@@ -70,33 +74,36 @@ ForecastController.prototype.getLocation = function(location, callback) {
       }
     });
   } else if (location.state) {
-    // If a state is specified, just pull the first result.
+    // If a state is specified, pull the first result.
     connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND (state='" + 
       location.state + "' OR state_full='" + location.state + "')", callback);
   } else if (location.type === 'name') {
-    // TODO: Async waterfall
-    // If a state wasn't specified, try using NY. 
-    connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND state='NY'", function (err, rows) {
+
+    async.waterfall([ 
+      function (cb) {
+        // If a state wasn't specified, try using NY.
+        connection.query("SELECT * FROM locations WHERE city='" + location.value + "' AND state='NY'", cb);
+      },
+      function (rows, fields, cb) {
+        if (rows.length > 0) {
+          callback (null, rows, fields);
+        } else {
+          // If NY didn't return a result, send back any instance of the city if there isn't more than one.
+          connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", cb);
+        }
+      }
+    ], function (err, rows, fields) {
       if (err) {
         callback(err);
-      } else if (rows.length > 0) {
-        callback (null, rows);
+      } else if (rows.length === 1) {
+        callback (null, rows, fields);
+      } else if (rows.length > 1) {
+        callback (new Error('Location not specific enough'));
       } else {
-        // If NY didn't return a result, send back any instance of the city, as long as there isn't more than one.
-        // If there is no unique value, return an error.
-        connection.query("SELECT * FROM locations WHERE city='" + location.value + "'", function (err, rows) {
-          if (err) {
-            callback(err);
-          } else if (rows.length === 1) {
-            callback (null, rows);
-          } else if (rows.length > 1) {
-            callback (new Error('Location not specific enough'));
-          } else {
-            callback(null, rows);
-          }
-        });
+        callback(null, rows, fields);
       }
     });
+
   } else {
     // If none of the above worked, it's an unrecognized type.
     callback(new Error('Location type not recognized.'));
@@ -105,7 +112,7 @@ ForecastController.prototype.getLocation = function(location, callback) {
 
 // Takes TweetData location object and queries WSI, adding the result to database.
 ForecastController.prototype.addLocation = function(location, callback) {
-  var locationValue, selectedCity, that = this;
+  var locationValue, selectedCity, cityData, that = this;
 
   // Set locationValue to a string that WSI can interpret.
   if (location.type === 'zip' || location.type === 'name') {
@@ -116,34 +123,41 @@ ForecastController.prototype.addLocation = function(location, callback) {
     callback(new Error('Location type not recognized.'));
   }
 
-  // TODO: Async waterfall.
-  wsi.getLocation(locationValue, function (err, data) {
+  async.waterfall([
+    function (cb) {
+      wsi.getLocation(locationValue, cb);
+    }, 
+    function (data, cb) {
+      if (!data.Cities.City) {
+        callback(new Error('Unsuccessful WSI request'));
+      } else {
+        selectedCity = that.findLocation(data.Cities.City, location);
+        if (selectedCity) {
+          cityData = {
+            locationId: selectedCity.$.Id,
+            zipCode: selectedCity.$.PreferredZipCode,
+            city: selectedCity.$.Name,
+            state: selectedCity.$.StateAbbr,
+            state_full: selectedCity.$.StateName
+          }
+          connection.query("INSERT INTO locations (location_id, zip_code, city, state, state_full) VALUES ('" + 
+            cityData.locationId + "','" + 
+            cityData.zipCode + "','" + 
+            cityData.city + "','" + 
+            cityData.state + "','" + 
+            cityData.state_full + "');", cb);
+        } else {
+          callback(new Error('Location not specific enough'));
+        }
+      }
+    }
+  ], function (err, result) {
     if (err) {
       callback(err);
     } else {
-      selectedCity = that.findLocation(data.Cities.City, location);
-
-      if (selectedCity) {
-        var locationId = selectedCity.$.Id,
-            zipCode = selectedCity.$.PreferredZipCode,
-            city = selectedCity.$.Name,
-            state = selectedCity.$.StateAbbr;
-            state_full = selectedCity.$.StateName;
-
-        connection.query("INSERT INTO locations (location_id, zip_code, city, state, state_full) VALUES ('" + 
-          locationId + "','" + zipCode + "','" + city + "','" + state + "','" + state_full + "');", function (err, result) {
-          if (err) {
-            callback(err);
-          } else {
-            callback(null, {locationId: locationId, zipCode: zipCode, city: city, state: state, state_full: state_full});
-          }
-        });
-
-      } else {
-        callback(new Error('Location not specific enough'));
-      }
+      callback(null, cityData);
     }
-  });
+  }); 
 }
 
 // Takes an array of WSI cities and a TweetData location object and returns the WSI city for the location.
@@ -181,10 +195,13 @@ ForecastController.prototype.findLocation = function (cities, location) {
 
 // Takes a locationId and queries WSI for the forecasts, adding them to memcached.
 ForecastController.prototype.addForecast = function (locationId, callback) {
-  wsi.getWeather(locationId, function (err, data) {
-    if (err) {
-      callback(err);
-    } else {
+  var forecast;
+
+  async.waterfall([
+    function (cb) {
+      wsi.getWeather(locationId, cb);
+    },
+    function (data, cb) {
       var hourlyForecasts = [],
           dailyForecasts = [];
 
@@ -207,16 +224,15 @@ ForecastController.prototype.addForecast = function (locationId, callback) {
           forecast: dailyData[i].$.PhraseDay
         });
       }
+      forecast = {hourlyForecasts: hourlyForecasts, dailyForecasts: dailyForecasts};
 
-      var forecast = {hourlyForecasts: hourlyForecasts, dailyForecasts: dailyForecasts};
-
-      memcached.add("ForecastController:" + locationId, forecast, 60 * 60, function (err) {
-        if (err) {
-          callback(err);
-        } else {
-          callback(null, forecast);
-        }
-      });
+      memcached.add("ForecastController:" + locationId, forecast, 60 * 60, cb);
+    }
+  ], function (err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, forecast);
     }
   });
 }

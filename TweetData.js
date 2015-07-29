@@ -67,7 +67,7 @@ TweetData.prototype.setCity = function(tweet, callback) {
       } else { 
         // If there is no location information, send an error.
         that.city = null;
-        callback(new Error('No location data available.'));
+        callback({name: 'LocationError', message: 'No location data available.'});
       }
       
     });

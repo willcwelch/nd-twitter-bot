@@ -19,25 +19,23 @@ WSI.prototype.getWeather = function(locationId, callback) {
 }
 
 // Uses an endpoint for WSI to make a request and parse it into JSON.
-WSI.prototype.wsiRequest = function(endpoint, cb) {
+WSI.prototype.wsiRequest = function(endpoint, callback) {
   async.waterfall([
-    function (callback) {
-      request(endpoint, callback);
+    function (cb) {
+      request(endpoint, cb);
     },
-
-    function (response, body, callback) {
+    function (response, body, cb) {
       if (response.statusCode === 200) {
-        xml2js(body, callback);
+        xml2js(body, cb);
       } else {
         callback(new Error("Response status: " + response.statusCode));
       }
     }
-
   ], function (err, result) {
     if (err) {
-      cb(err);
+      callback(err);
     } else {
-      cb(null, result);
+      callback(null, result);
     }
   });
 }
