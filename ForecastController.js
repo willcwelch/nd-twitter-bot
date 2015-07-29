@@ -98,7 +98,7 @@ ForecastController.prototype.getLocation = function(location, callback) {
       } else if (rows.length === 1) {
         callback (null, rows, fields);
       } else if (rows.length > 1) {
-        callback (new Error('Location not specific enough'));
+        callback ({name: 'NonSpecificLocationError', message: 'Location not specific enough'});
       } else {
         callback(null, rows, fields);
       }
@@ -147,7 +147,7 @@ ForecastController.prototype.addLocation = function(location, callback) {
             cityData.state + "','" + 
             cityData.state_full + "');", cb);
         } else {
-          callback(new Error('Location not specific enough'));
+          callback({name: 'NonSpecificLocationError', message: 'Location not specific enough'});
         }
       }
     }

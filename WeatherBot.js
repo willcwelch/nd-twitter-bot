@@ -9,12 +9,14 @@ WeatherBot.prototype.getTweet = function(tweetData, callback) {
   var that = this, forecast;
 
   forecastController.getForecast(tweetData.city, function (err, forecasts) {
-    if (err) {
+    if (err && err.name === 'NonSpecificLocationError') {
+      // If there is a non-specific location error, prompt the user to add the state.
+      callback(null, '@' + tweetData.sender + ' Sorry, I need a more specific location. Try adding the state.');
+    } else if (err) {
       callback(err);
     } else {
       forecast = that.selectForecast(tweetData.date.value, forecasts);
 
-      // TODO: Add message for unspecific locations.
       if (forecast === null) {
         // If the value of forecast wasn't set, there wasn't a forecast in the time range.
         callback(null, '@' + tweetData.sender + ' Sorry, I can only tell you about the next 10 days.');
