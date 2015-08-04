@@ -5,7 +5,7 @@
   var Twit = require('twit'),
       async = require('async'),
       TweetData = require('./lib/TweetData.js').TweetData,
-      weatherBot = require('./lib/weatherbot/WeatherBot.js').WeatherBot,
+      weatherBot = require('./lib/weatherbot/weatherbot.js').WeatherBot,
       config = require('./config.js').config;
   
   var userId = 3331300337; // The user ID for the account we're tweeting from.
@@ -67,7 +67,7 @@
   });
 
   // Takes a string and tweets it.
-  var sendTweet = function(message) {
+  function sendTweet (message) {
     twitter.post('statuses/update', {status: message}, function (err, data) {
       if (err) {
         console.log(err);
