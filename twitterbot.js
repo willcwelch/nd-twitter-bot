@@ -4,7 +4,7 @@
   
   var Twit = require('twit'),
       async = require('async'),
-      TweetData = require('./lib/TweetData.js').TweetData,
+      TweetData = require('./lib/tweetdata.js').TweetData,
       weatherBot = require('./lib/weatherbot/weatherbot.js').WeatherBot,
       config = require('./config.js').config;
   
@@ -30,17 +30,17 @@
         }
       ], function (err, response) {
         if (err && err.name === 'LocationError') {
-          console.log('@' + tweet.user.screen_name + ' Sorry, I could not get a location. Try using a ZIP code.');
+          sendTweet('@' + tweet.user.screen_name + ' Sorry, I could not get a location. Try using a ZIP code.');
         } else if (err) {
           console.log(err);
         } else {
-          console.log(response);
+          sendTweet(response);
         }
       });
 
     } else {
       // If the tweet was a reply but we don't know what it's about, ignore it.
-      console.log('@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.');
+      sendTweet('@' + tweetData.sender + ' Sorry, I don’t understand. Try asking me about the weather.');
     }
   });
 
@@ -68,6 +68,9 @@
 
   // Takes a string and tweets it.
   function sendTweet (message) {
+    message = message.slice(0, message.lastIndexOf('.', 140)+1);
+    console.log(message);
+    /*
     twitter.post('statuses/update', {status: message}, function (err, data) {
       if (err) {
         console.log(err);
@@ -75,6 +78,7 @@
         console.log('Tweet sent.');
       }
     });
+  */
   }
 
 })();
